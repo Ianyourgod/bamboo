@@ -30,10 +30,12 @@ class Parser:
     def parse(self):
         
         while self.pos < len(self.tokens):
-            self.ast.append(self.expr())
-            if (not self.current_token or self.current_token.name != "semicolon"):
-                raise ExpectedChar("semicolon", self.current_token.name if self.current_token else "EOF")
-            self.advance()
+            node = self.expr()
+            if node:
+                self.ast.append(node)
+                if (not self.current_token or self.current_token.name != "semicolon"):
+                    raise ExpectedChar("semicolon", self.current_token.name if self.current_token else "EOF")
+                self.advance()
         return self.ast
     
     def expr(self):
@@ -90,7 +92,6 @@ class Parser:
             if not (self.current_token and self.current_token.name == "lbrace"):
                 raise ExpectedChar("lbrace", self.current_token.name)
             
-            self.advance()
             code = self.code_block()
             node = Node("for", [var, iter], code)
 
@@ -101,6 +102,15 @@ class Parser:
         elif self.current_token and self.current_token.name == "return":
             self.advance()
             node = Node("return", self.expr())
+        elif self.current_token and self.current_token.name == "break":
+            self.advance()
+            node = Node("break", None)
+        elif self.current_token and self.current_token.name == "continue":
+            self.advance()
+            node = Node("continue", None)
+        elif self.current_token and self.current_token.name == "import":
+            self.advance()
+            node = Node("import", self.atom())
 
         return node
     def conditionals(self):
@@ -177,6 +187,9 @@ class Parser:
                         raise ExpectedChar(")", self.current_token.name)
                     self.advance()
                     return node
+                case "semicolon":
+                    self.advance()
+                    return None
             if self.current_token.name in KEYWORDS:
                 return
         raise ExpectedChar("number, string, identifier, bool, none, or lparen", self.current_token.name)
@@ -263,6 +276,7 @@ class Parser:
             elif self.current_token.name == "rbrace":
                 brace_count -= 1
         self.advance()
+        print(code)
         new_parse = Parser(code)
         return new_parse.parse()
         

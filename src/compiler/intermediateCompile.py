@@ -21,7 +21,7 @@ builtins = {
 
 class ICompiler:
     def __init__(self) -> None:
-        self.out = []
+        self.out = {"extensions": [], "blocks": []}
 
     def block(self, opcode: str, args: list):
         return {
@@ -54,12 +54,13 @@ class ICompiler:
         }
 
     def compile(self, ast: list):
-        self.out = []
+        self.out = {"extensions": [], "blocks": []}
         self.ast = ast
 
         for self.node in ast:
-            self.out.append(self.compileNode(self.node))
+            self.out["blocks"].append(self.compileNode(self.node))
 
+        self.out["extensions"] = list(set(self.out["extensions"]))
         return self.out
     
     def compileNode(self, node):
@@ -105,27 +106,33 @@ class ICompiler:
             )
         elif node.type == "if":
             tempCompiler = ICompiler()
+            code = tempCompiler.compile(node.right[0])
+            self.out["extensions"].extend(code["extensions"])
             return self.cblock(
                 "control_if",
                 [
                     self.compileNode(node.left)
                 ],
-                tempCompiler.compile(node.right[0]),
+                code,
                 self.compileNode(node.right[1]) if node.right[1] else None
             )
         elif node.type == "else if":
             tempCompiler = ICompiler()
+            code = tempCompiler.compile(node.right[0])
+            self.out["extensions"].extend(code["extensions"])
             return self.cblock(
                 "control_if",
                 [
                     self.compileNode(node.left)
                 ],
-                tempCompiler.compile(node.right[0]),
+                code["blocks"],
                 self.compileNode(node.right[1]) if node.right[1] else None
             )
         elif node.type == "else":
             tempCompiler = ICompiler()
-            return tempCompiler.compile(node.left)
+            code = tempCompiler.compile(node.right)
+            self.out["extensions"].extend(code["extensions"])
+            return code["blocks"]
         elif node.type == "eq":
             return self.block(
                 "operator_equals",
@@ -205,19 +212,23 @@ class ICompiler:
                 )
             else:
                 tempCompiler = ICompiler()
+                code = tempCompiler.compile(node.right)
+                self.out["extensions"].extend(code["extensions"])
                 return self.block(
                     "procedures_call",
                     [
                         self.value(node.left),
-                        tempCompiler.compile(node.right)
+                        code["blocks"]
                     ] 
                 )
         elif node.type == "define":
             tempCompiler = ICompiler()
+            code = tempCompiler.compile(node.right[1])
+            self.out["extensions"].extend(code["extensions"])
             return self.hat(
                 "procedures_definition",
                 [node.right[0]],
-                tempCompiler.compile(node.right[1])
+                code["blocks"]
             )
         elif node.type == "return":
             return self.block(
@@ -228,23 +239,29 @@ class ICompiler:
             )
         elif node.type == "for":
             tempCompiler = ICompiler()
+            code = tempCompiler.compile(node.right)
+            self.out["extensions"].extend(code["extensions"])
             return self.cblock(
                 "control_for_each",
                 [
                     node.left[0],
                     self.compileNode(node.left[1])
                 ],
-                tempCompiler.compile(node.right)
+                code["blocks"]
             )
         elif node.type == "while":
             tempCompiler = ICompiler()
+            code = tempCompiler.compile(node.right)
+            self.out["extensions"].extend(code["extensions"])
             return self.cblock(
                 "control_repeat_until",
                 [
                     self.value(node.left)
                 ],
-                tempCompiler.compile(node.right)
+                code["blocks"]
             )
+        elif node.type == "import":
+            self.out["extensions"].append(node.left)
         elif node.type == "number":
             return self.value(node.left)
         elif node.type == "string":
@@ -256,6 +273,17 @@ class ICompiler:
                     self.value(node.left)
                 ]
             )
+        elif node.type == "true":
+            return self.block("operator_trueBoolean", [])
+        elif node.type == "false":
+            return self.block("operator_falseBoolean", [])
+        elif node.type == "none":
+            return self.block("operator_falseBoolean", [])
+        elif node.type == "break":
+            return self.block("control_exitLoop", [])
+        elif node.type == "continue":
+            self.out["extensions"].append("pmControlsExpansion")
+            return self.block("pmControlsExpansion_restartFromTheTop", [])
         else:
             raise Exception(f"Unknown node type {node.type}")
 

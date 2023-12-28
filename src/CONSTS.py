@@ -13,5 +13,8 @@ KEYWORDS = [
     "true",      # done
     "false",     # done
     "none",      # done
-    "in"
+    "in",
+    "break",
+    "continue",
+    "import"
 ]
